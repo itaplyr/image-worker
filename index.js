@@ -12,7 +12,8 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'healthy', worker: true });
+    const ramUsage = Math.round(process.memoryUsage().rss / 1024 / 1024); // MB
+    res.json({ status: 'healthy', worker: true, ramUsage });
 });
 
 app.post('/generate', async (req, res) => {
