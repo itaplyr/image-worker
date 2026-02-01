@@ -63,11 +63,9 @@ const generationQueue = [];
 function processQueue() {
     if (activeImageGenerations < MAX_CONCURRENT_GENERATIONS && generationQueue.length > 0) {
         activeImageGenerations++;
-        console.log(`[ImageGen] Starting generation (${activeImageGenerations}/${MAX_CONCURRENT_GENERATIONS} active, ${generationQueue.length} queued)`);
         const task = generationQueue.shift();
         task().finally(() => {
             activeImageGenerations--;
-            console.log(`[ImageGen] Completed generation (${activeImageGenerations}/${MAX_CONCURRENT_GENERATIONS} active, ${generationQueue.length} queued)`);
             processQueue();
         });
     }
@@ -271,7 +269,6 @@ export async function generateTradePNG(tradeData) {
             await fetchItemData();
         }
         const loadEndTime = Date.now();
-        console.log(`[Worker] Loaded item data in ${loadEndTime - loadStartTime}ms`);
 
         const allItemIds = [...(tradeData[4].items || []), ...(tradeData[5].items || [])];
         const uniqueTagIds = [...new Set(tradeData[5].tags || [])];
@@ -287,7 +284,6 @@ export async function generateTradePNG(tradeData) {
             }
         }
         const halfTime = Date.now();
-        console.log(`[Worker] Fetched ${allItemIds.length} item icons in ${halfTime - startTime}ms`);
         const tagIcons = {};
         for (const tagId of uniqueTagIds) {
             const imageUrl = tagMap[tagId]?.imageUrl;
@@ -298,7 +294,6 @@ export async function generateTradePNG(tradeData) {
             }
         }
         const endTime = Date.now();
-        console.log(`[Worker] Fetched ${uniqueTagIds.length} tag icons in ${endTime - halfTime}ms`);
 
         const templatePath = "./template2.svg";
         const templateStr = fs.readFileSync(path.resolve(templatePath), 'utf-8');
@@ -324,7 +319,6 @@ export async function generateTradePNG(tradeData) {
 async function fetchItemData() {
     if (fs.existsSync('./items.json')) {
         itemDataCache = JSON.parse(fs.readFileSync('./items.json', 'utf-8'));
-        console.log(`[Worker] Loaded ${Object.keys(itemDataCache).length} items from local file`);
         return;
     }
     try {
@@ -332,7 +326,6 @@ async function fetchItemData() {
         const responseData = await response.json();
         itemDataCache = responseData.data || {};
         fs.writeFileSync('./items.json', JSON.stringify(itemDataCache));
-        console.log(`[Worker] Loaded ${Object.keys(itemDataCache).length} items from Rolimons API`);
     } catch (error) {
         console.error('[Worker] Failed to fetch item data:', error);
         itemDataCache = {};
