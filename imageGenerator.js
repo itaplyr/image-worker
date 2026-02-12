@@ -10,6 +10,7 @@ const IMAGE_CACHE_DIR = path.join(process.cwd(), 'image-cache');
 const MAX_CACHE_SIZE_MB = 50;
 const MAX_CACHE_FILES = 1000;
 const ROBLOX_THUMBNAIL_URL = 'https://thumbnails.roblox.com/v1/assets';
+const THUMBNAIL_SIZE = '420x420';
 
 if (!fs.existsSync(IMAGE_CACHE_DIR)) {
     fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
@@ -140,7 +141,7 @@ export async function downloadImageAsBase64(url) {
  * @returns {string} Thumbnail URL
  */
 function getRobloxThumbnailUrl(itemId) {
-    return `${ROBLOX_THUMBNAIL_URL}?assetIds=${itemId}&size=352x352&format=Png&isCircular=false`;
+    return `${ROBLOX_THUMBNAIL_URL}?assetIds=${itemId}&size=${THUMBNAIL_SIZE}&format=Png&isCircular=false`;
 }
 
 /**
@@ -152,7 +153,7 @@ async function fetchRobloxThumbnails(itemIds) {
     if (!itemIds || itemIds.length === 0) return {};
 
     try {
-        const response = await fetch(`${ROBLOX_THUMBNAIL_URL}?assetIds=${itemIds.join(',')}&size=352x352&format=Png&isCircular=false`);
+        const response = await fetch(`${ROBLOX_THUMBNAIL_URL}?assetIds=${itemIds.join(',')}&size=${THUMBNAIL_SIZE}&format=Png&isCircular=false`);
         if (response.ok) {
             const data = await response.json();
             if (data.data && Array.isArray(data.data)) {
