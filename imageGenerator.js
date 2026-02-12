@@ -321,8 +321,14 @@ export async function generateTradePNG(tradeData) {
         const itemIcons = {};
         if (allItemIds.length > 0) {
             const thumbnails = await fetchRobloxThumbnails(allItemIds);
+
             for (const id of allItemIds) {
-                itemIcons[id] = thumbnails[id] || "";
+                const url = thumbnails[id];
+                if (url) {
+                    itemIcons[id] = await downloadImageAsBase64(url);
+                } else {
+                    itemIcons[id] = "";
+                }
             }
         }
 
