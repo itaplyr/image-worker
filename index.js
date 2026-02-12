@@ -44,6 +44,34 @@ async function monitorRam(shouldRun) {
     return peak;
 }
 
+// Restarts the worker process
+function restartWorker(reason) {
+    console.warn(`[Worker] ⚠️ Restarting due to: ${reason} (RAM: ${getRamUsageMB()}MB)`);
+
+    // Give time for logs to flush
+    setTimeout(() => {
+        process.exit(1); // Exit with error code
+    }, 1000);
+}
+
+// Background RAM monitor - restarts worker if RAM exceeds limit
+function startRamMonitor() {
+    const CHECK_INTERVAL = 60000; // Check every minute
+    const RESTART_THRESHOLD = RAM_LIMIT_MB;
+
+    setInterval(() => {
+        const currentRam = getRamUsageMB();
+
+        // Only restart if we're well over the limit (give some buffer)
+        if (currentRam > RESTART_THRESHOLD) {
+            console.warn(`[Worker] RAM monitor: ${currentRam}MB > ${RESTART_THRESHOLD}MB threshold`);
+            restartWorker(`high RAM usage (${currentRam}MB)`);
+        }
+    }, CHECK_INTERVAL);
+
+    console.log(`[Worker] RAM monitor started (check every ${CHECK_INTERVAL}ms, restart if > ${RESTART_THRESHOLD}MB)`);
+}
+
 // =======================
 // ROUTES
 // =======================
@@ -120,6 +148,7 @@ app.post('/generate', async (req, res) => {
             console.warn(
                 `[Worker] RAM exceeded limit during render (${ramPeak}MB)`
             );
+            restartWorker(`RAM exceeded limit during render (${ramPeak}MB)`);
         }
 
         res.setHeader('Content-Type', 'image/png');
@@ -154,6 +183,9 @@ app.listen(PORT, () => {
     console.log(`Image Worker running on port ${PORT}`);
     console.log(`RAM limit: ${RAM_LIMIT_MB} MB`);
     console.log(`Max concurrent jobs: ${MAX_CONCURRENT_JOBS}`);
+
+    // Start background RAM monitor
+    startRamMonitor();
 });
 
 export default app;
