@@ -2,11 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import fetch from 'node-fetch';
+import rolimons from 'rolimons';
+
 let itemDataCache = {};
 
 const IMAGE_CACHE_DIR = path.join(process.cwd(), 'image-cache');
 const MAX_CACHE_SIZE_MB = 50;
 const MAX_CACHE_FILES = 1000;
+const ROBLOX_THUMBNAIL_URL = 'https://thumbnails.roblox.com/v1/assets';
 
 if (!fs.existsSync(IMAGE_CACHE_DIR)) {
     fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
@@ -131,9 +134,45 @@ export async function downloadImageAsBase64(url) {
     }
 }
 
+/**
+ * Get item thumbnail URL from Roblox thumbnail API
+ * @param {number} itemId - The item ID
+ * @returns {string} Thumbnail URL
+ */
+function getRobloxThumbnailUrl(itemId) {
+    return `${ROBLOX_THUMBNAIL_URL}?assetIds=${itemId}&size=352x352&format=Png&isCircular=false`;
+}
+
+/**
+ * Fetch thumbnails for multiple items using Roblox thumbnail API
+ * @param {Array<number>} itemIds - Array of item IDs
+ * @returns {Object} Map of itemId -> thumbnail URL
+ */
+async function fetchRobloxThumbnails(itemIds) {
+    if (!itemIds || itemIds.length === 0) return {};
+
+    try {
+        const response = await fetch(`${ROBLOX_THUMBNAIL_URL}?assetIds=${itemIds.join(',')}&size=352x352&format=Png&isCircular=false`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.data && Array.isArray(data.data)) {
+                const thumbnails = {};
+                for (const item of data.data) {
+                    if (item.targetId && item.imageUrl) {
+                        thumbnails[item.targetId] = item.imageUrl;
+                    }
+                }
+                return thumbnails;
+            }
+        }
+    } catch (e) {
+        console.warn('[ImageGen] Failed to fetch Roblox thumbnails:', e.message);
+    }
+    return {};
+}
 
 export async function fetchRolimonsItems() {
-    return itemDataCache
+    return itemDataCache;
 }
 
 export function calculateValueAndRap(tradeData) {
@@ -265,6 +304,8 @@ export async function renderTradeAd(svg) {
 export async function generateTradePNG(tradeData) {
     return queueImageGeneration(async () => {
         const loadStartTime = Date.now();
+
+        // Load item data from rolimons package
         if (Object.keys(itemDataCache).length === 0) {
             await fetchItemData();
         }
@@ -274,15 +315,16 @@ export async function generateTradePNG(tradeData) {
         const uniqueTagIds = [...new Set(tradeData[5].tags || [])];
 
         const startTime = Date.now();
+
+        // Fetch item icons from Roblox thumbnail API
         const itemIcons = {};
-        for (const id of allItemIds) {
-            const iconUrl = itemDataCache[id]?.icon;
-            if (iconUrl) {
-                itemIcons[id] = await downloadImageAsBase64(iconUrl);
-            } else {
-                itemIcons[id] = "";
+        if (allItemIds.length > 0) {
+            const thumbnails = await fetchRobloxThumbnails(allItemIds);
+            for (const id of allItemIds) {
+                itemIcons[id] = thumbnails[id] || "";
             }
         }
+
         const halfTime = Date.now();
         const tagIcons = {};
         for (const tagId of uniqueTagIds) {
@@ -317,17 +359,49 @@ export async function generateTradePNG(tradeData) {
 }
 
 async function fetchItemData() {
+    // Try to load from cache file first
     if (fs.existsSync('./items.json')) {
-        itemDataCache = JSON.parse(fs.readFileSync('./items.json', 'utf-8'));
-        return;
+        try {
+            itemDataCache = JSON.parse(fs.readFileSync('./items.json', 'utf-8'));
+            console.log('[Worker] Loaded items from cache file');
+            return;
+        } catch (e) {
+            console.warn('[Worker] Failed to load items from cache:', e.message);
+        }
     }
+
     try {
-        const response = await fetch('https://rolimons.reklaw.dev/api/items');
-        const responseData = await response.json();
-        itemDataCache = responseData.data || {};
-        fs.writeFileSync('./items.json', JSON.stringify(itemDataCache));
+        // Use official rolimons npm package
+        const response = await rolimons.items.getItems();
+
+        if (response && response.success && response.items) {
+            // Convert the raw data format to our cache format
+            const rawItems = response.items;
+            for (const itemId in rawItems) {
+                const item = rawItems[itemId];
+                itemDataCache[itemId] = {
+                    id: parseInt(itemId),
+                    name: item[0],
+                    acronym: item[1],
+                    rap: item[2],
+                    value: item[3],
+                    default_value: item[4],
+                    demand: item[5],
+                    trend: item[6],
+                    projected: item[7],
+                    hyped: item[8],
+                    rare: item[9]
+                };
+            }
+
+            // Save to cache file
+            fs.writeFileSync('./items.json', JSON.stringify(itemDataCache));
+            console.log(`[Worker] Fetched ${Object.keys(itemDataCache).length} items from official API`);
+        } else {
+            throw new Error('Invalid response from rolimons API');
+        }
     } catch (error) {
-        console.error('[Worker] Failed to fetch item data:', error);
+        console.error('[Worker] Failed to fetch item data:', error.message);
         itemDataCache = {};
     }
 }
