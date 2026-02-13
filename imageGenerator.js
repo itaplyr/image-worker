@@ -386,12 +386,14 @@ async function fetchItemData() {
             const rawItems = response.items;
             for (const itemId in rawItems) {
                 const item = rawItems[itemId];
+                var newValue = item[3]
+                if (newValue == -1) { newValue = item[2] }
                 itemDataCache[itemId] = {
                     id: parseInt(itemId),
                     name: item[0],
                     acronym: item[1],
                     rap: item[2],
-                    value: item[3],
+                    value: newValue,
                     default_value: item[4],
                     demand: item[5],
                     trend: item[6],
